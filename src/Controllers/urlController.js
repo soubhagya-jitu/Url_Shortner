@@ -20,9 +20,6 @@ redisClient.auth("63Fkn6vvGYtfftugyWgr7LrK8Emyqedh", function (err) {
 redisClient.on("connect", async function () {
     console.log("Connected to Redis..");
 });
-
-
-
 //1. connect to the server
 //2. use the commands :
 
@@ -38,7 +35,7 @@ const isValid = function (value) {
     return true;
 }
 
-const isValidURL = function(URL){
+const isValidURL = function (URL) {
     return /^https?:\/\/(www\.)?[-a-zA-Z0-9@:%.\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%\+.~#?&//=]*)/.test(URL)
 }
 
@@ -46,31 +43,32 @@ const createURL = async function (req, res) {
     try {
         let data = req.body
         const longUrl = data.longUrl
-        if (Object.keys(data).length == 0) return res.status(400).send({ status: false, message: "Please Provide data" })
-        if (!isValid(longUrl)) return res.status(400).send({ status: false, message: "Please provide URL" })
 
+        if (Object.keys(data).length == 0) return res.status(400).send({ status: false, message: "Please Provide data" })
+
+        if (!isValid(longUrl)) return res.status(400).send({ status: false, message: "Please provide URL" })
         if (!isValidURL(longUrl)) return res.status(400).send({ status: false, message: "Please provide valid URL" })
 
         let cachedURLData = await GET_ASYNC(`${longUrl}`)
         if (cachedURLData) return res.status(200).send({ status: true, message: "URL already shortened", data: JSON.parse(cachedURLData) })
 
+        let checkUrl = await urlModel.findOne({ longUrl: longUrl }).select({ _id: 0, __v: 0, createdAt: 0, updatedAt: 0 })
+        if (checkUrl) {
+            await SET_ASYNC(`${longUrl}`, JSON.stringify(checkUrl))
+            return res.status(200).send({ status: true, message: "long Url already  Shortned", data: checkUrl })
+        }
+
         const urlCode = shortid.generate().toLowerCase()
-
-        let alreadyURl = await urlModel.findOne({ urlCode: urlCode })
-        if (alreadyURl) return res.status(409).send({ status: true, message: "URL already exist" })
-
         let shortUrl = baseUrl + urlCode
-        let Data = {
+
+        let urldata = {
             "longUrl": longUrl,
             "shortUrl": shortUrl,
             "urlCode": urlCode
         }
 
-        await urlModel.create(Data)
-        let findUrl = await urlModel.findOne({longUrl: longUrl})
-        await SET_ASYNC(`${longUrl}`, JSON.stringify(findUrl))
-        res.status(201).send({ status: true, message: "URL shortened Successfully", data: Data })
-
+        await urlModel.create(urldata)
+        res.status(201).send({ status: true, message: "URL shortened Successfully", data: urldata })
     }
     catch (err) {
         res.status(500).send({ status: false, message: err.message })
@@ -80,18 +78,20 @@ const createURL = async function (req, res) {
 
 const getUrl = async function (req, res) {
     try {
-        let data = req.params.urlCode
+        let urlCode = req.params.urlCode
 
-        if (!shortid.isValid(data)) return res.status(400).send({ status: false, message: "please enter valid URL code" })
+        if (!shortid.isValid(urlCode)) return res.status(400).send({ status: false, message: "please enter valid URL code" })
 
-        let cachedURLData = await GET_ASYNC(`${data}`)
+        let cachedURLData = await GET_ASYNC(`${urlCode}`)
         if (cachedURLData) {
-          return res.status(302).redirect(JSON.parse(cachedURLData))
+            return res.status(302).redirect(JSON.parse(cachedURLData))
 
         } else {
-            let findUrl = await urlModel.findOne({ urlCode: data })
+            let findUrl = await urlModel.findOne({ urlCode: urlCode })
             if (!findUrl) return res.status(404).send({ status: false, message: "UrlCode does not found!!" })
-            await SET_ASYNC(`${data}`, JSON.stringify(findUrl.longUrl))
+
+            await SET_ASYNC(`${urlCode}`, JSON.stringify(findUrl.longUrl))
+
             return res.status(302).redirect(findUrl.longUrl)
         }
     }
@@ -99,5 +99,6 @@ const getUrl = async function (req, res) {
         res.status(500).send({ status: false, message: err.message })
     }
 }
+
 
 module.exports = { createURL, getUrl }
