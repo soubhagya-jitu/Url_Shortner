@@ -1,9 +1,7 @@
 const urlModel = require('../models/urlModel')
 const shortid = require('shortid')
-
-const baseUrl = "http://localhost:3000/"
-
 const redis = require("redis");
+const baseUrl = "http://localhost:3000/"
 
 const { promisify } = require("util");
 
